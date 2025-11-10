@@ -48,8 +48,9 @@ function Solar_Power() {
     // Listen for Hybrid_Power data changes
     const hybridRef = ref(databaseSolar, 'Hybrid_Power');
     
-    // Also listen to Wired_Voltage separately if it's a sibling node
-    const wiredVoltageRef = ref(databaseSolar, 'Hybrid_Power/Wired_Voltage');
+  // Also listen to Wired_Voltage separately (handle both spellings)
+  const wiredVoltageRef = ref(databaseSolar, 'Hybrid_Power/Wired_Voltage');
+  const wiredVolatgeRef = ref(databaseSolar, 'Hybrid_Power/Wired_Volatge');
     
     const unsubscribe = onValue(hybridRef, (snapshot) => {
       const data = snapshot.val() || {};
@@ -66,10 +67,14 @@ function Solar_Power() {
           Car_Current: toFloat(data.Car_Current, prev.Car_Current || 0),
           Car_Voltage: toFloat(data.Car_Voltage, prev.Car_Voltage || 0),
           Wired: (data.Wired !== undefined) ? toInt(data.Wired, prev.Wired || 0) : prev.Wired,
-          // Keep existing Wired_Voltage if snapshot doesn't contain it
-          Wired_Voltage: (data.Wired_Voltage !== undefined)
-            ? toFloat(data.Wired_Voltage, prev.Wired_Voltage || 0)
-            : prev.Wired_Voltage,
+          // Keep existing Wired_Voltage if snapshot doesn't contain it (supports misspelling 'Wired_Volatge')
+          Wired_Voltage: (() => {
+            const wiredRaw = (data.Wired_Voltage !== undefined) ? data.Wired_Voltage
+                              : (data.Wired_Volatge !== undefined ? data.Wired_Volatge : undefined);
+            return (wiredRaw !== undefined)
+              ? toFloat(wiredRaw, prev.Wired_Voltage || 0)
+              : prev.Wired_Voltage;
+          })(),
           Wireless: (data.Wireless !== undefined) ? toInt(data.Wireless, prev.Wireless || 0) : prev.Wireless,
           Wireless_Voltage: (data.Wireless_Voltage !== undefined)
             ? toFloat(data.Wireless_Voltage, prev.Wireless_Voltage || 0)
@@ -96,9 +101,22 @@ function Solar_Power() {
       }
     });
 
+    // Listen to alternate misspelling 'Wired_Volatge'
+    const unsubscribeWiredAlt = onValue(wiredVolatgeRef, (snapshot) => {
+      const wiredVoltageData = snapshot.val();
+      console.log('Direct Wired_Volatge data:', wiredVoltageData);
+      if (wiredVoltageData !== null) {
+        setHybridData(prev => ({
+          ...prev,
+          Wired_Voltage: parseFloat(wiredVoltageData.Wired_Volatge || wiredVoltageData) || 0
+        }));
+      }
+    });
+
     return () => {
       unsubscribe();
       unsubscribeWired();
+      unsubscribeWiredAlt();
     };
   }, []);
 
